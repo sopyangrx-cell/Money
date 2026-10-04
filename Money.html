@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catatan Keuangan Harian</title>
+<style>
+  :root{
+    --bg:#13141A;
+    --surface:#1A1C24;
+    --surface-2:#20222C;
+    --line:#2B2E38;
+    --ink:#EDEEF2;
+    --ink-dim:#8D90A0;
+    --accent:#5B8CFF;
+    --accent-dim:#3E5CB0;
+    --pos:#3FC88F;
+    --neg:#E8604F;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:var(--sans); }
+  .wrap{ max-width:760px; margin:0 auto; padding:36px 20px 80px; }
+
+  header{ margin-bottom:26px; }
+  header h1{ font-size:24px; margin:0 0 6px; font-weight:600; letter-spacing:-.01em; }
+  header p{ color:var(--ink-dim); font-size:14px; line-height:1.6; margin:0; }
+
+  .summary{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:22px; }
+  .summary-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px;
+  }
+  .summary-card .lbl{ color:var(--ink-dim); font-size:12.5px; margin-bottom:6px; }
+  .summary-card .val{ font-family:var(--mono); font-size:19px; font-weight:600; }
+  .summary-card.masuk .val{ color:var(--pos); }
+  .summary-card.keluar .val{ color:var(--neg); }
+  .summary-card.saldo .val{ color:var(--accent); }
+  @media (max-width:520px){ .summary{ grid-template-columns:1fr; } }
+
+  .form-panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:24px;
+  }
+  .form-row{ display:flex; gap:10px; margin-bottom:10px; }
+  .form-row:last-of-type{ margin-bottom:14px; }
+  .form-row > *{ flex:1; }
+  input, select{
+    width:100%; padding:11px 12px; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:7px; color:var(--ink); font-family:var(--sans); font-size:14px;
+  }
+  input::placeholder{ color:var(--ink-dim); }
+  input:focus, select:focus{ outline:none; border-color:var(--accent-dim); }
+  select{ cursor:pointer; }
+
+  .btn-add{
+    width:100%; padding:12px; background:var(--accent); border:none; border-radius:7px;
+    color:#0C1020; font-weight:600; font-size:14.5px; cursor:pointer;
+  }
+  .btn-add:hover{ background:#6F99FF; }
+
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+  .tabs button{
+    padding:10px 16px; background:transparent; border:none; color:var(--ink-dim);
+    font-family:var(--sans); font-size:14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .tabs button.active{ color:var(--ink); border-bottom-color:var(--accent); font-weight:600; }
+
+  .group{ margin-bottom:20px; }
+  .group-title{ color:var(--ink-dim); font-size:13px; margin-bottom:8px; font-weight:500; }
+  .tx-item{
+    display:flex; justify-content:space-between; align-items:center; padding:12px 14px;
+    background:var(--surface); border:1px solid var(--line); border-radius:8px; margin-bottom:8px;
+  }
+  .tx-left{ display:flex; flex-direction:column; gap:2px; }
+  .tx-note{ font-size:14px; }
+  .tx-date{ font-size:12px; color:var(--ink-dim); font-family:var(--mono); }
+  .tx-right{ display:flex; align-items:center; gap:12px; }
+  .tx-amount{ font-family:var(--mono); font-size:14.5px; font-weight:600; }
+  .tx-amount.masuk{ color:var(--pos); }
+  .tx-amount.keluar{ color:var(--neg); }
+  .tx-delete{
+    background:transparent; border:none; color:var(--ink-dim); cursor:pointer; font-size:17px;
+    padding:2px 6px; border-radius:5px; line-height:1;
+  }
+  .tx-delete:hover{ color:var(--neg); background:rgba(232,96,79,.1); }
+
+  .empty-state{ text-align:center; padding:50px 20px; color:var(--ink-dim); font-size:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Catatan Keuangan Harian</h1>
+    <p>Uang masuk & keluar, dikelompokkan per hari. Data tersimpan otomatis di browser ini.</p>
+  </header>
+
+  <div class="summary">
+    <div class="summary-card masuk">
+      <div class="lbl">Total Masuk</div>
+      <div class="val" id="totalMasuk">Rp 0</div>
+    </div>
+    <div class="summary-card keluar">
+      <div class="lbl">Total Keluar</div>
+      <div class="val" id="totalKeluar">Rp 0</div>
+    </div>
+    <div class="summary-card saldo">
+      <div class="lbl">Saldo</div>
+      <div class="val" id="totalSaldo">Rp 0</div>
+    </div>
+  </div>
+
+  <div class="form-panel">
+    <div class="form-row">
+      <input type="date" id="inputTanggal">
+      <select id="inputTipe">
+        <option value="masuk">Masuk</option>
+        <option value="keluar">Keluar</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <input type="number" id="inputJumlah" placeholder="Jumlah (Rp)" min="0">
+      <input type="text" id="inputKeterangan" placeholder="Keterangan (opsional)">
+    </div>
+    <button class="btn-add" id="btnTambah">+ Tambah Transaksi</button>
+  </div>
+
+  <div class="tabs">
+    <button class="active" data-mode="harian">Harian</button>
+    <button data-mode="mingguan">Mingguan</button>
+    <button data-mode="bulanan">Bulanan</button>
+  </div>
+
+  <div id="listArea"></div>
+</div>
+
+<script>
+const STORAGE_KEY = 'catatan_keuangan_transaksi';
+let transaksi = [];
+let mode = 'harian';
+
+const els = {
+  tanggal: document.getElementById('inputTanggal'),
+  tipe: document.getElementById('inputTipe'),
+  jumlah: document.getElementById('inputJumlah'),
+  keterangan: document.getElementById('inputKeterangan'),
+  btnTambah: document.getElementById('btnTambah'),
+  totalMasuk: document.getElementById('totalMasuk'),
+  totalKeluar: document.getElementById('totalKeluar'),
+  totalSaldo: document.getElementById('totalSaldo'),
+  listArea: document.getElementById('listArea'),
+  tabs: document.querySelectorAll('.tabs button'),
+};
+
+els.tanggal.value = new Date().toISOString().slice(0,10);
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    transaksi = raw ? JSON.parse(raw) : [];
+  } catch(e){ transaksi = []; }
+}
+
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(transaksi));
+}
+
+function fmtRp(n){
+  return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+}
+
+function renderSummary(){
+  const masuk = transaksi.filter(t => t.tipe === 'masuk').reduce((s,t) => s + t.jumlah, 0);
+  const keluar = transaksi.filter(t => t.tipe === 'keluar').reduce((s,t) => s + t.jumlah, 0);
+  els.totalMasuk.textContent = fmtRp(masuk);
+  els.totalKeluar.textContent = fmtRp(keluar);
+  els.totalSaldo.textContent = fmtRp(masuk - keluar);
+}
+
+function getWeekLabel(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay() === 0 ? 7 : d.getDay();
+  const monday = new Date(d); monday.setDate(d.getDate() - day + 1);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const fmt = (dt) => `${dt.getDate()} ${dt.toLocaleDateString('id-ID',{month:'short'})}`;
+  return `${fmt(monday)} – ${fmt(sunday)} ${sunday.getFullYear()}`;
+}
+
+function getMonthLabel(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('id-ID', { month:'long', year:'numeric' });
+}
+
+function getDayLabel(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+function renderList(){
+  if (transaksi.length === 0){
+    els.listArea.innerHTML = '<div class="empty-state">Belum ada transaksi. Tambahin yang pertama di atas.</div>';
+    return;
+  }
+
+  const sorted = [...transaksi].sort((a,b) => b.tanggal.localeCompare(a.tanggal) || b.id - a.id);
+
+  const groups = {};
+  const labelFn = mode === 'harian' ? getDayLabel : mode === 'mingguan' ? getWeekLabel : getMonthLabel;
+  const keyFn = mode === 'harian' ? (t => t.tanggal)
+    : mode === 'mingguan' ? (t => getWeekLabel(t.tanggal))
+    : (t => t.tanggal.slice(0,7));
+
+  sorted.forEach(t => {
+    const key = keyFn(t);
+    if (!groups[key]) groups[key] = { label: labelFn(t.tanggal), items: [] };
+    groups[key].items.push(t);
+  });
+
+  els.listArea.innerHTML = Object.values(groups).map(g => `
+    <div class="group">
+      <div class="group-title">${g.label}</div>
+      ${g.items.map(t => `
+        <div class="tx-item">
+          <div class="tx-left">
+            <div class="tx-note">${t.keterangan || (t.tipe === 'masuk' ? 'Pemasukan' : 'Pengeluaran')}</div>
+            <div class="tx-date">${t.tanggal}</div>
+          </div>
+          <div class="tx-right">
+            <div class="tx-amount ${t.tipe}">${t.tipe === 'masuk' ? '+' : '-'} ${fmtRp(t.jumlah)}</div>
+            <button class="tx-delete" data-id="${t.id}" title="Hapus">×</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  els.listArea.querySelectorAll('.tx-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = Number(btn.dataset.id);
+      transaksi = transaksi.filter(t => t.id !== id);
+      save();
+      renderAll();
+    });
+  });
+}
+
+function renderAll(){
+  renderSummary();
+  renderList();
+}
+
+els.btnTambah.addEventListener('click', () => {
+  const tanggal = els.tanggal.value;
+  const tipe = els.tipe.value;
+  const jumlah = parseFloat(els.jumlah.value);
+  const keterangan = els.keterangan.value.trim();
+
+  if (!tanggal){ alert('Isi tanggal dulu.'); return; }
+  if (!jumlah || jumlah <= 0){ alert('Isi jumlah yang valid.'); return; }
+
+  transaksi.push({
+    id: Date.now(),
+    tanggal, tipe, jumlah, keterangan,
+  });
+  save();
+
+  els.jumlah.value = '';
+  els.keterangan.value = '';
+  renderAll();
+});
+
+els.tabs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    mode = btn.dataset.mode;
+    els.tabs.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderList();
+  });
+});
+
+load();
+renderAll();
+</script>
+</body>
+</html>
